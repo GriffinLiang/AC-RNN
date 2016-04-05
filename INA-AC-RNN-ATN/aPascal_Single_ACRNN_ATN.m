@@ -35,21 +35,15 @@ h0 = initializeParameters(h_size, 1);
 OptTheta = [W_hv(:); W_hh(:); W_oh(:); b_h(:); b_o(:); h0(:)];
 RNN.v = v_size; RNN.h = h_size; RNN.z = z_size; RNN.T = T;
 sequence_label = train_attribute_labels;
-weight = zeros(size(sequence_label));
-for jj = 1:size(sequence_label, 1)
-    pos_num = sum(sequence_label(jj, :) == 1);
-    neg_num = sum(sequence_label(jj, :) == 0);
-    weight(jj, sequence_label(jj, :)==1) = (pos_num + neg_num)/(2*pos_num);
-    weight(jj, sequence_label(jj, :)==0) = (pos_num + neg_num)/(2*neg_num);
-end
 options.maxIter = 400 ;
 options.Method = 'L-BFGS'; 
 options.display = 'on'; 
 [OptTheta, cost] = minFunc( @(p) multiRnnAttReg_cost(p, att_set, train_data, ...
-                sequence_label, RNN,lambda,weight), OptTheta, options); 
+                sequence_label, RNN,lambda), OptTheta, options);    
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
 
 atn{1} = bsxfun(@rdivide, att_set, sum(att_set, 1));
+% multip scale
 atn{1} = atn{1}*size(att_set, 1);
 u{1} = W_hv*atn{1} + W_hh*repmat(h0, 1, n_att) + repmat(b_h, 1, n_att);
 h{1} = sigmoid(u{1});

@@ -1,26 +1,33 @@
 clear; 
-addpath D:\Dataset\Attribute\aPascal_aYahoo ;
-load('aPascal_DeCAF.mat', 'aPascal_train', 'aPascal_test') ;
-load('aPascal_Annotation.mat','apascal_train_attribute');
-load('aPascal_Annotation.mat','apascal_test_attribute');
+addpath D:\Dataset\Attribute\Imagenet\ ;
+load('imagenet_attribute_25_BB_DeCAF.mat') ;
+load('attrann.mat') ;
 
-nData = size(aPascal_train, 2);
-train_data = aPascal_train(:, mod(1:nData, 10) ~= 0);
-val_data = aPascal_train(:, mod(1:nData, 10) == 0);
-test_data = aPascal_test;
-train_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) ~= 0);
-val_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) == 0);
-test_attribute_labels = apascal_test_attribute;
+category_label = repmat(1:384, 25, 1) ;      
+category_label = category_label(:) ;
+attribute_label = attrann.labels' ;
+attribute_label(attribute_label == 0) = 0.5 ;
+attribute_label(attribute_label == -1) = 0 ;
 
-clear  aPascal_train apascal_train_category apascal_train_attribute
-clear  aPascal_test apascal_test_category apascal_test_attribute
+data = bsxfun(@rdivide, feaTrain, sqrt(sum(feaTrain.^2))) ;
+nData = size(data, 2);
+
+train_data = data(:, mod(1:nData, 10)<6);
+val_data = data(:, mod(1:nData, 10)==6);
+test_data = data(:, mod(1:nData, 10)>6);
+
+train_attribute_labels = attribute_label(:, mod(1:nData, 10)<6);
+val_attribute_labels = attribute_label(:, mod(1:nData, 10)==6);
+test_attribute_labels = attribute_label(:, mod(1:nData, 10)>6);
+
+clear  data attribute_label category_label attrann feaTrain
 
 fid = 1;
 
 %% Double Attribute Learning 
 DouAtt_matrix = [];
-for ii = 1:64
-    for jj = ii+1:64
+for ii = 1:size(train_attribute_labels, 1)
+    for jj = ii+1:size(train_attribute_labels, 1)
         idx_ii = train_attribute_labels(ii,:);
         idx_jj = train_attribute_labels(jj,:);
         idx_ii_val = val_attribute_labels(ii,:);
@@ -57,7 +64,7 @@ for ii = 1:size(DouAtt_matrix, 1)
     idx_jj_val = val_attribute_labels(DouAtt_matrix(ii, 2),:);
     idx_ii_te = test_attribute_labels(DouAtt_matrix(ii, 1),:);
     idx_jj_te = test_attribute_labels(DouAtt_matrix(ii, 2),:);  
-    for kk = DouAtt_matrix(ii, 2)+1:64
+    for kk = DouAtt_matrix(ii, 2)+1:size(train_attribute_labels, 1)
         idx_kk = train_attribute_labels(kk,:);
         idx_kk_val = val_attribute_labels(kk,:);
         idx_kk_te = test_attribute_labels(kk,:);
@@ -88,13 +95,13 @@ end
 
 lambda = 10.^(-2);
 h_size = 60;
-v_size = 64;
+v_size = size(train_attribute_labels, 1);
 fprintf(fid, 'Triple Attribute lambda:%f, h_size:%d\t', lambda, h_size);
 z_size = size(train_data, 1);
 n_att{1} = size(train_attribute_labels, 1);
 T = 3;
 iter = 1;
-attEmbed{1}{1} = eye(n_att{1});
+attEmbed{1}{1} = 0.5*v_size*eye(n_att{1});
 attEmbed{2}{1} = attEmbed{1}{1}(:, DouAtt_matrix(:,1));
 attEmbed{2}{2} = attEmbed{1}{1}(:, DouAtt_matrix(:,2));
 attEmbed{3}{1} = attEmbed{1}{1}(:, TriAtt_matrix(1:iter:end,1));
@@ -123,7 +130,7 @@ options.maxIter = 400 ;
 options.Method = 'L-BFGS'; 
 options.display = 'on';        
 [OptTheta, cost] = minFunc( @(p) multiRnnReg_cost(p, attEmbed, train_data, ...
-                          sequence_label, RNN, lambda, weight), theta, options); 
+                          sequence_label, RNN, lambda, weight), theta, options);     
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
 clear u h o
 

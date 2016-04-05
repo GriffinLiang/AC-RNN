@@ -94,7 +94,7 @@ z_size = size(train_data, 1);
 n_att{1} = size(train_attribute_labels, 1);
 T = 3;
 iter = 1;
-attEmbed{1}{1} = eye(n_att{1});
+attEmbed{1}{1} = 0.5*v_size*eye(n_att{1});
 attEmbed{2}{1} = attEmbed{1}{1}(:, DouAtt_matrix(:,1));
 attEmbed{2}{2} = attEmbed{1}{1}(:, DouAtt_matrix(:,2));
 attEmbed{3}{1} = attEmbed{1}{1}(:, TriAtt_matrix(1:iter:end,1));
@@ -112,12 +112,18 @@ RNN.v = v_size; RNN.h = h_size; RNN.z = z_size; RNN.T = T;
 sequence_label{1} = train_attribute_labels;
 sequence_label{2} = tr_dou_att_labels;
 sequence_label{3} = tr_tri_att_labels(1:iter:end, :);
-
+weight{3} = zeros(size(sequence_label{3}));
+for jj = 1:size(sequence_label{3}, 1)
+    pos_num = sum(sequence_label{3}(jj, :) == 1);
+    neg_num = sum(sequence_label{3}(jj, :) == 0);
+    weight{3}(jj, sequence_label{3}(jj, :)==1) = (pos_num + neg_num)/(2*pos_num);
+    weight{3}(jj, sequence_label{3}(jj, :)==0) = (pos_num + neg_num)/(2*neg_num);
+end
 options.maxIter = 400 ;
 options.Method = 'L-BFGS'; 
 options.display = 'on';        
 [OptTheta, cost] = minFunc( @(p) multiRnnReg_cost(p, attEmbed, train_data, ...
-                          sequence_label, RNN, lambda), theta, options);    
+                          sequence_label, RNN, lambda, weight), theta, options); 
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
 clear u h o
 
