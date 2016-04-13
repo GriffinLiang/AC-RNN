@@ -110,68 +110,62 @@ for ii = 1:size(TriAtt_matrix, 1)
                           (test_attribute_labels(att3,:)==0.5)) = 0.5;                           
 end
 
+att_set = zeros(size(train_attribute_labels, 1), size(TriAtt_matrix, 1));
+for ii = 1:3
+att_set(sub2ind(size(att_set), TriAtt_matrix(:,ii)', 1:size(TriAtt_matrix, 1))) = 1;
+end
 
-lambda = 10.^(-4);
+
+T = 2;
+lambda = 10.^(-3);
 h_size = 60;
 v_size = size(train_attribute_labels, 1);
-fprintf(fid, 'Triple Attribute lambda:%f, h_size:%d\t', lambda, h_size);
+fprintf(fid, 'Triple Attribute lambda:%f, h_size:%d\n', lambda, h_size);
 z_size = size(train_data, 1);
-n_att{1} = size(train_attribute_labels, 1);
-T = 3;
-iter = 1;
-attEmbed{1}{1} = 0.5*v_size*eye(n_att{1});
-attEmbed{2}{1} = attEmbed{1}{1}(:, DouAtt_matrix(:,1));
-attEmbed{2}{2} = attEmbed{1}{1}(:, DouAtt_matrix(:,2));
-attEmbed{3}{1} = attEmbed{1}{1}(:, TriAtt_matrix(1:iter:end,1));
-attEmbed{3}{2} = attEmbed{1}{1}(:, TriAtt_matrix(1:iter:end,2));
-attEmbed{3}{3} = attEmbed{1}{1}(:, TriAtt_matrix(1:iter:end,3));
-
+n_att = size(tr_tri_att_labels, 1);
 W_hv = initializeParameters(h_size,v_size);
 W_hh = initializeParameters(h_size,h_size);
 W_oh = initializeParameters(z_size,h_size);
 b_h = initializeParameters(h_size, 1);
 b_o = initializeParameters(z_size, 1);
 h0 = initializeParameters(h_size, 1);
-theta = [W_hv(:); W_hh(:); W_oh(:); b_h(:); b_o(:); h0(:)];
+OptTheta = [W_hv(:); W_hh(:); W_oh(:); b_h(:); b_o(:); h0(:)];
 RNN.v = v_size; RNN.h = h_size; RNN.z = z_size; RNN.T = T;
-sequence_label{1} = train_attribute_labels;
-sequence_label{2} = tr_dou_att_labels;
-sequence_label{3} = tr_tri_att_labels(1:iter:end, :);
-weight{3} = ones(size(sequence_label{3}));
-for jj = 1:size(sequence_label{3}, 1)
-    weight{3}(jj, sequence_label{3}(jj, :)==0.5) = 0;
+sequence_label = tr_tri_att_labels;
+weight = zeros(size(sequence_label));
+for jj = 1:size(sequence_label, 1)
+    pos_num = sum(sequence_label(jj, :) == 1);
+    neg_num = sum(sequence_label(jj, :) == 0);
+    weight(jj, sequence_label(jj, :)==1) = (pos_num + neg_num)/(2*pos_num);
+    weight(jj, sequence_label(jj, :)==0) = (pos_num + neg_num)/(2*neg_num);
 end
-
 options.maxIter = 400 ;
 options.Method = 'L-BFGS'; 
-options.display = 'on';        
-[OptTheta, cost] = minFunc( @(p) multiRnnReg_cost(p, attEmbed, train_data, ...
-                          sequence_label, RNN, lambda, weight), theta, options);    
+options.display = 'on'; 
+
+[OptTheta, cost] = minFunc( @(p) multiRnnAttReg_cost(p, att_set, train_data, ...
+                sequence_label, RNN,lambda, weight), OptTheta, options);    
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
-clear u h o
 
-sequence_label_val{1} = val_attribute_labels;
-sequence_label_val{2} = val_dou_att_labels;
-sequence_label_val{3} = val_tri_att_labels;
-sequence_label_test{1} = test_attribute_labels;
-sequence_label_test{2} = te_dou_att_labels;
-sequence_label_test{3} = te_tri_att_labels;
-attEmbed{2}{1} = attEmbed{1}{1}(:, DouAtt_matrix(:,1));
-attEmbed{2}{2} = attEmbed{1}{1}(:, DouAtt_matrix(:,2));
-attEmbed{3}{1} = attEmbed{1}{1}(:, TriAtt_matrix(:,1));
-attEmbed{3}{2} = attEmbed{1}{1}(:, TriAtt_matrix(:,2));
-attEmbed{3}{3} = attEmbed{1}{1}(:, TriAtt_matrix(:,3));
+atn{1} = bsxfun(@rdivide, att_set, sum(att_set, 1));
+atn{1} = atn{1}*size(att_set, 1);
+u{1} = W_hv*atn{1} + W_hh*repmat(h0, 1, n_att) + repmat(b_h, 1, n_att);
+h{1} = sigmoid(u{1});
 
-n_att{T} = size(attEmbed{T}{1}, 2) ;
-u{1} = W_hv*attEmbed{T}{1} + W_hh*repmat(h0, 1, n_att{T}) + repmat(b_h, 1, n_att{T});
-h{1} = sigmoid(u{1});       
-for jj = 2:T
-    u{jj} = W_hv*attEmbed{T}{jj} + W_hh*h{jj-1} + repmat(b_h, 1, n_att{T});
-    h{jj} = sigmoid(u{jj});
+for ii = 2:RNN.T
+    M{ii-1} = W_hv'*h{ii-1} ;
+    M{ii-1} = bsxfun(@minus, M{ii-1}, max(M{ii-1}, [], 1)) ;
+    atn{ii} = bsxfun(@rdivide, exp(M{ii-1}), sum(exp(M{ii-1})));
+    atn{ii} = atn{ii}*size(att_set, 1);
+    u{ii} = W_hv*atn{ii} + W_hh*h{ii-1} + repmat(b_h, 1, n_att);
+    h{ii} = sigmoid(u{ii});
 end
-o = W_oh*h{T} + repmat(b_o, 1, n_att{T});
-predProbVal{T} = sigmoid(o'*val_data);
-predProbTest{T} = sigmoid(o'*test_data);
-auc_val{T} = computeAUC(predProbVal{T}, sequence_label_val{T}) ;
-auc_test{T} = computeAUC(predProbTest{T}, sequence_label_test{T}) ;       
-fprintf(fid, 'AUC Val:%0.4f\tTest:%0.4f\n', mean(auc_val{T}), mean(auc_test{T}));
+
+o = W_oh*h{RNN.T} + repmat(b_o, 1, n_att);
+
+predProbVal = sigmoid(o'*val_data);
+auc_val = computeAUC(predProbVal, val_tri_att_labels) ;
+fprintf(fid, 'Val mAUC:%0.4f\t', mean(auc_val)) ;
+predProbTe = sigmoid(o'*test_data);
+auc_te = computeAUC(predProbTe, te_tri_att_labels) ;
+fprintf(fid, 'Test mAUC:%0.4f\n', mean(auc_te)) ;                        

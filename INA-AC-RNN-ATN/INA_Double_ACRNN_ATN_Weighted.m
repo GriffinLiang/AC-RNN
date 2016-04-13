@@ -1,32 +1,39 @@
 clear; 
-addpath D:\Dataset\Attribute\aPascal_aYahoo ;
-load('aPascal_DeCAF.mat', 'aPascal_train', 'aPascal_test') ;
-load('aPascal_Annotation.mat','apascal_train_attribute');
-load('aPascal_Annotation.mat','apascal_test_attribute');
+addpath D:\Dataset\Attribute\Imagenet\ ;
+load('imagenet_attribute_25_BB_DeCAF.mat') ;
+load('attrann.mat') ;
 
-nData = size(aPascal_train, 2);
-train_data = aPascal_train(:, mod(1:nData, 10) ~= 0);
-val_data = aPascal_train(:, mod(1:nData, 10) == 0);
-test_data = aPascal_test;
-train_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) ~= 0);
-val_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) == 0);
-test_attribute_labels = apascal_test_attribute;
+category_label = repmat(1:384, 25, 1) ;      
+category_label = category_label(:) ;
+attribute_label = attrann.labels' ;
+attribute_label(attribute_label == 0) = 0.5 ;
+attribute_label(attribute_label == -1) = 0 ;
 
-clear  aPascal_train apascal_train_category apascal_train_attribute
-clear  aPascal_test apascal_test_category apascal_test_attribute
+data = bsxfun(@rdivide, feaTrain, sqrt(sum(feaTrain.^2))) ;
+nData = size(data, 2);
+
+train_data = data(:, mod(1:nData, 10)<6);
+val_data = data(:, mod(1:nData, 10)==6);
+test_data = data(:, mod(1:nData, 10)>6);
+
+train_attribute_labels = attribute_label(:, mod(1:nData, 10)<6);
+val_attribute_labels = attribute_label(:, mod(1:nData, 10)==6);
+test_attribute_labels = attribute_label(:, mod(1:nData, 10)>6);
+
+clear  data attribute_label category_label attrann feaTrain
 
 fid = 1;
 
 %% Double Attribute Learning 
 DouAtt_matrix = [];
-for ii = 1:64
-    for jj = ii+1:64
-        idx_ii = train_attribute_labels(ii,:);
-        idx_jj = train_attribute_labels(jj,:);
-        idx_ii_val = val_attribute_labels(ii,:);
-        idx_jj_val = val_attribute_labels(jj,:);
-        idx_ii_te = test_attribute_labels(ii,:);
-        idx_jj_te = test_attribute_labels(jj,:);        
+for ii = 1:size(train_attribute_labels, 1)
+    for jj = ii+1:size(train_attribute_labels, 1)
+        idx_ii = train_attribute_labels(ii,:) == 1;
+        idx_jj = train_attribute_labels(jj,:) == 1;
+        idx_ii_val = val_attribute_labels(ii,:) == 1;
+        idx_jj_val = val_attribute_labels(jj,:) == 1;
+        idx_ii_te = test_attribute_labels(ii,:) == 1;
+        idx_jj_te = test_attribute_labels(jj,:) == 1;        
         if(sum(idx_ii & idx_jj) > 0 && sum(idx_ii_val & idx_jj_val) > 0 && ...
                 sum(idx_ii_te & idx_jj_te) > 0)
             DouAtt_matrix = [DouAtt_matrix; ii jj];
@@ -34,29 +41,36 @@ for ii = 1:64
     end
 end
 
-tr_dou_att_labels = [];
-val_dou_att_labels = [];
-te_dou_att_labels = [];
+tr_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(train_data,2));
+val_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(val_data,2));
+te_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(test_data,2));
 for ii = 1:size(DouAtt_matrix, 1)
-    att1 = DouAtt_matrix(ii, 1);
-    att2 = DouAtt_matrix(ii, 2);
-    tr_dou_att_labels = [tr_dou_att_labels; train_attribute_labels(att1,:) & ...
-                                            train_attribute_labels(att2,:)];
-    val_dou_att_labels = [val_dou_att_labels; val_attribute_labels(att1,:) & ...
-                                            val_attribute_labels(att2,:)];
-	te_dou_att_labels = [te_dou_att_labels; test_attribute_labels(att1,:) & ...
-                                            test_attribute_labels(att2,:)];
+    
+att1 = DouAtt_matrix(ii, 1);
+att2 = DouAtt_matrix(ii, 2);
+tr_dou_att_labels(ii,:) = (train_attribute_labels(att1,:)==1) & ...
+                          (train_attribute_labels(att2,:)==1);
+tr_dou_att_labels(ii,(train_attribute_labels(att1,:)==0.5) | ...
+                     (train_attribute_labels(att2,:)==0.5)) = 0.5;                      
+val_dou_att_labels(ii,:) = (val_attribute_labels(att1,:)==1) & ...
+                           (val_attribute_labels(att2,:)==1);
+val_dou_att_labels(ii,(val_attribute_labels(att1,:)==0.5) | ...
+                     (val_attribute_labels(att2,:)==0.5)) = 0.5;                         
+te_dou_att_labels(ii,:) = (test_attribute_labels(att1,:)==1) & ...
+                          (test_attribute_labels(att2,:)==1);
+te_dou_att_labels(ii,(test_attribute_labels(att1,:)==0.5) | ...
+                     (test_attribute_labels(att2,:)==0.5)) = 0.5;                         
 end
 
-att_set = zeros(64, size(DouAtt_matrix, 1));
+att_set = zeros(size(train_attribute_labels, 1), size(DouAtt_matrix, 1));
 for ii = 1:2
 att_set(sub2ind(size(att_set), DouAtt_matrix(:,ii)', 1:size(DouAtt_matrix, 1))) = 1;
 end
 
 T = 2;
 lambda = 10.^(-2);            
-h_size = 60;
-v_size = 64;
+h_size = 80;
+v_size = size(train_attribute_labels, 1);
 fprintf(fid, 'Double Attribute T:%d, lambda:%f, h_size:%d\n', T, lambda, h_size);
 z_size = size(train_data, 1);
 n_att = size(tr_dou_att_labels, 1);

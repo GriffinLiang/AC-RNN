@@ -1,28 +1,30 @@
-clear; 
-addpath D:\Dataset\Attribute\aPascal_aYahoo ;
-load('aPascal_DeCAF.mat', 'aPascal_train', 'aPascal_test') ;
-load('aPascal_Annotation.mat','apascal_train_attribute');
-load('aPascal_Annotation.mat','apascal_test_attribute');
+clear;clc;
+addpath D:\Dataset\Attribute\lfwa
+load('lfw_att_40','label') ;
+load('LFWA_VGG_Face_center');
+attribute_label = label' ;
 
-nData = size(aPascal_train, 2);
-train_data = aPascal_train(:, mod(1:nData, 10) ~= 0);
-val_data = aPascal_train(:, mod(1:nData, 10) == 0);
-test_data = aPascal_test;
-train_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) ~= 0);
-val_attribute_labels = apascal_train_attribute(:, mod(1:nData, 10) == 0);
-test_attribute_labels = apascal_test_attribute;
+data = bsxfun(@rdivide, feaTrain, sqrt(sum(feaTrain.^2))) ;
+nData = size(data, 2);
 
-clear  aPascal_train apascal_train_category apascal_train_attribute
-clear  aPascal_test apascal_test_category apascal_test_attribute
+train_data = data(:, mod(1:nData, 10)<6);
+val_data = data(:, mod(1:nData, 10)==6);
+test_data = data(:, mod(1:nData, 10)>6);
+
+train_attribute_labels = attribute_label(:, mod(1:nData, 10)<6);
+val_attribute_labels = attribute_label(:, mod(1:nData, 10)==6);
+test_attribute_labels = attribute_label(:, mod(1:nData, 10)>6);
+
+clear feaTrain data attribute_label label 
 
 %% Single attribute query
 fid = 1;
 
-att_set = eye(64);
+att_set = eye(size(train_attribute_labels, 1));
 T = 2;
 lambda = 10.^(-3);            
 h_size = 60;
-v_size = 64;
+v_size = size(train_attribute_labels, 1);
 fprintf(fid, 'Single Attribute T:%d, lambda:%f, h_size:%d\n', T, lambda, h_size);
 z_size = size(train_data, 1);
 n_att = size(train_attribute_labels, 1);
@@ -35,21 +37,15 @@ h0 = initializeParameters(h_size, 1);
 OptTheta = [W_hv(:); W_hh(:); W_oh(:); b_h(:); b_o(:); h0(:)];
 RNN.v = v_size; RNN.h = h_size; RNN.z = z_size; RNN.T = T;
 sequence_label = train_attribute_labels;
-weight = zeros(size(sequence_label));
-for jj = 1:size(sequence_label, 1)
-    pos_num = sum(sequence_label(jj, :) == 1);
-    neg_num = sum(sequence_label(jj, :) == 0);
-    weight(jj, sequence_label(jj, :)==1) = (pos_num + neg_num)/(2*pos_num);
-    weight(jj, sequence_label(jj, :)==0) = (pos_num + neg_num)/(2*neg_num);
-end
-options.maxIter = 400 ;
+options.maxIter = 1 ;
 options.Method = 'L-BFGS'; 
 options.display = 'on'; 
 [OptTheta, cost] = minFunc( @(p) multiRnnAttReg_cost(p, att_set, train_data, ...
-                sequence_label, RNN,lambda,weight), OptTheta, options); 
+                sequence_label, RNN,lambda), OptTheta, options);    
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
 
 atn{1} = bsxfun(@rdivide, att_set, sum(att_set, 1));
+% multip scale
 atn{1} = atn{1}*size(att_set, 1);
 u{1} = W_hv*atn{1} + W_hh*repmat(h0, 1, n_att) + repmat(b_h, 1, n_att);
 h{1} = sigmoid(u{1});

@@ -27,7 +27,7 @@ fid = 1;
 
 lambda = 10.^(-3);
 h_size = 60;
-v_size = size(train_category_label, 1);
+v_size = size(train_attribute_labels, 1);
 fprintf(fid, 'Single Attribute lambda:%f, h_size:%d\n', lambda, h_size);
 z_size = size(train_data, 1);
 n_att = size(train_attribute_labels, 1);
@@ -42,11 +42,13 @@ h0 = initializeParameters(h_size, 1);
 theta = [W_hv(:); W_hh(:); W_oh(:); b_h(:); b_o(:); h0(:)];
 RNN.v = v_size; RNN.h = h_size; RNN.z = z_size; RNN.T = T;
 sequence_label{1} = train_attribute_labels;
+weight{1} = zeros(size(sequence_label{1}));
+weight{1}(sequence_label{1} ~= 0.5) = 1;
 options.maxIter = 400 ;
 options.Method = 'L-BFGS'; 
 options.display = 'on';     
 [OptTheta, cost] = minFunc( @(p) multiRnnReg_cost(p, attEmbed, train_data, ...
-                          sequence_label, RNN, lambda), theta, options);    
+                          sequence_label, RNN, lambda), OptTheta, options);    
 [W_hv, W_hh, W_oh, b_h, b_o, h0] = parameter_init_RNN(OptTheta, RNN);
 u{1} = W_hv*attEmbed{1}{1} + W_hh*repmat(h0, 1, n_att) + repmat(b_h, 1, n_att);
 h{1} = sigmoid(u{1});

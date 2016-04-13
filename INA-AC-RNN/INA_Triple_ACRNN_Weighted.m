@@ -25,15 +25,16 @@ clear  data attribute_label category_label attrann feaTrain
 fid = 1;
 
 %% Double Attribute Learning 
+
 DouAtt_matrix = [];
 for ii = 1:size(train_attribute_labels, 1)
     for jj = ii+1:size(train_attribute_labels, 1)
-        idx_ii = train_attribute_labels(ii,:);
-        idx_jj = train_attribute_labels(jj,:);
-        idx_ii_val = val_attribute_labels(ii,:);
-        idx_jj_val = val_attribute_labels(jj,:);
-        idx_ii_te = test_attribute_labels(ii,:);
-        idx_jj_te = test_attribute_labels(jj,:);        
+        idx_ii = train_attribute_labels(ii,:) == 1;
+        idx_jj = train_attribute_labels(jj,:) == 1;
+        idx_ii_val = val_attribute_labels(ii,:) == 1;
+        idx_jj_val = val_attribute_labels(jj,:) == 1;
+        idx_ii_te = test_attribute_labels(ii,:) == 1;
+        idx_jj_te = test_attribute_labels(jj,:) == 1;        
         if(sum(idx_ii & idx_jj) > 0 && sum(idx_ii_val & idx_jj_val) > 0 && ...
                 sum(idx_ii_te & idx_jj_te) > 0)
             DouAtt_matrix = [DouAtt_matrix; ii jj];
@@ -41,33 +42,40 @@ for ii = 1:size(train_attribute_labels, 1)
     end
 end
 
-tr_dou_att_labels = [];
-val_dou_att_labels = [];
-te_dou_att_labels = [];
+tr_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(train_data,2));
+val_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(val_data,2));
+te_dou_att_labels = zeros(size(DouAtt_matrix, 1), size(test_data,2));
 for ii = 1:size(DouAtt_matrix, 1)
-    att1 = DouAtt_matrix(ii, 1);
-    att2 = DouAtt_matrix(ii, 2);
-    tr_dou_att_labels = [tr_dou_att_labels; train_attribute_labels(att1,:) & ...
-                                            train_attribute_labels(att2,:)];
-    val_dou_att_labels = [val_dou_att_labels; val_attribute_labels(att1,:) & ...
-                                            val_attribute_labels(att2,:)];
-	te_dou_att_labels = [te_dou_att_labels; test_attribute_labels(att1,:) & ...
-                                            test_attribute_labels(att2,:)];
+    
+att1 = DouAtt_matrix(ii, 1);
+att2 = DouAtt_matrix(ii, 2);
+tr_dou_att_labels(ii,:) = (train_attribute_labels(att1,:)==1) & ...
+                          (train_attribute_labels(att2,:)==1);
+tr_dou_att_labels(ii,(train_attribute_labels(att1,:)==0.5) | ...
+                     (train_attribute_labels(att2,:)==0.5)) = 0.5;                      
+val_dou_att_labels(ii,:) = (val_attribute_labels(att1,:)==1) & ...
+                           (val_attribute_labels(att2,:)==1);
+val_dou_att_labels(ii,(val_attribute_labels(att1,:)==0.5) | ...
+                     (val_attribute_labels(att2,:)==0.5)) = 0.5;                         
+te_dou_att_labels(ii,:) = (test_attribute_labels(att1,:)==1) & ...
+                          (test_attribute_labels(att2,:)==1);
+te_dou_att_labels(ii,(test_attribute_labels(att1,:)==0.5) | ...
+                     (test_attribute_labels(att2,:)==0.5)) = 0.5;                         
 end
 
 %% Triple Attribute Learning 
 TriAtt_matrix = [];
 for ii = 1:size(DouAtt_matrix, 1)
-    idx_ii = train_attribute_labels(DouAtt_matrix(ii, 1),:);
-	idx_jj = train_attribute_labels(DouAtt_matrix(ii, 2),:);
-    idx_ii_val = val_attribute_labels(DouAtt_matrix(ii, 1),:);
-    idx_jj_val = val_attribute_labels(DouAtt_matrix(ii, 2),:);
-    idx_ii_te = test_attribute_labels(DouAtt_matrix(ii, 1),:);
-    idx_jj_te = test_attribute_labels(DouAtt_matrix(ii, 2),:);  
+    idx_ii = train_attribute_labels(DouAtt_matrix(ii, 1),:) == 1;
+	idx_jj = train_attribute_labels(DouAtt_matrix(ii, 2),:) == 1;
+    idx_ii_val = val_attribute_labels(DouAtt_matrix(ii, 1),:) == 1;
+    idx_jj_val = val_attribute_labels(DouAtt_matrix(ii, 2),:) == 1;
+    idx_ii_te = test_attribute_labels(DouAtt_matrix(ii, 1),:) == 1;
+    idx_jj_te = test_attribute_labels(DouAtt_matrix(ii, 2),:) == 1;  
     for kk = DouAtt_matrix(ii, 2)+1:size(train_attribute_labels, 1)
-        idx_kk = train_attribute_labels(kk,:);
-        idx_kk_val = val_attribute_labels(kk,:);
-        idx_kk_te = test_attribute_labels(kk,:);
+        idx_kk = train_attribute_labels(kk,:) == 1;
+        idx_kk_val = val_attribute_labels(kk,:) == 1;
+        idx_kk_te = test_attribute_labels(kk,:) == 1;
         if(sum(idx_ii & idx_jj & idx_kk) > 0 && sum(idx_ii_val & idx_jj_val & idx_kk_val) > 0 ...
                 && sum(idx_ii_te & idx_jj_te & idx_kk_te) > 0)
                 TriAtt_matrix = [TriAtt_matrix; DouAtt_matrix(ii, :) kk];
@@ -76,24 +84,34 @@ for ii = 1:size(DouAtt_matrix, 1)
 end
 
 tr_tri_att_labels = zeros(size(TriAtt_matrix, 1), size(train_data, 2));
+val_tri_att_labels = zeros(size(TriAtt_matrix, 1), size(val_data, 2));
 te_tri_att_labels = zeros(size(TriAtt_matrix, 1), size(test_data, 2));
 for ii = 1:size(TriAtt_matrix, 1)
     att1 = TriAtt_matrix(ii, 1);
     att2 = TriAtt_matrix(ii, 2);
     att3 = TriAtt_matrix(ii, 3);
-    tr_tri_att_labels(ii, :) = train_attribute_labels(att1,:) & ... 
-                               train_attribute_labels(att2,:) & ...
-                               train_attribute_labels(att3,:) ;
-	val_tri_att_labels(ii, :) = val_attribute_labels(att1,:) & ...
-                               val_attribute_labels(att2,:) & ...
-                               val_attribute_labels(att3,:) ;
-	te_tri_att_labels(ii, :) = test_attribute_labels(att1,:) & ...
-                               test_attribute_labels(att2,:) & ...
-                               test_attribute_labels(att3,:) ;
+    tr_tri_att_labels(ii, :) = (train_attribute_labels(att1,:) == 1)& ... 
+                               (train_attribute_labels(att2,:) == 1)& ...
+                               (train_attribute_labels(att3,:) == 1);
+    tr_tri_att_labels(ii,(train_attribute_labels(att1,:)==0.5) | ...
+                         (train_attribute_labels(att2,:)==0.5) | ...
+                         (train_attribute_labels(att3,:)==0.5)) = 0.5;  
+    val_tri_att_labels(ii, :) = (val_attribute_labels(att1,:) == 1)& ... 
+                               (val_attribute_labels(att2,:) == 1)& ...
+                               (val_attribute_labels(att3,:) == 1);
+    val_tri_att_labels(ii,(val_attribute_labels(att1,:)==0.5) | ...
+                          (val_attribute_labels(att2,:)==0.5) | ...
+                          (val_attribute_labels(att3,:)==0.5)) = 0.5;                             
+    te_tri_att_labels(ii, :) = (test_attribute_labels(att1,:) == 1)& ...
+                               (test_attribute_labels(att2,:) == 1)& ...
+                               (test_attribute_labels(att3,:) == 1);
+    te_tri_att_labels(ii, (test_attribute_labels(att1,:)==0.5) | ...
+                          (test_attribute_labels(att2,:)==0.5) | ...
+                          (test_attribute_labels(att3,:)==0.5)) = 0.5;                           
 end
 
 
-lambda = 10.^(-2);
+lambda = 10.^(-4);
 h_size = 60;
 v_size = size(train_attribute_labels, 1);
 fprintf(fid, 'Triple Attribute lambda:%f, h_size:%d\t', lambda, h_size);
